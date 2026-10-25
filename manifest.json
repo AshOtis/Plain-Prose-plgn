@@ -1,0 +1,11 @@
+{
+  "id": "plain-prose",
+  "name": "Plain Prose",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "A writing coach that points things out and never rewrites: your own grade range, the rhythm of your sentences, habits worth a second look, and how a chapter compares with your others.",
+  "author": "AshOtis",
+  "authorUrl": "https://github.com/AshOtis",
+  "fundingUrl": "https://buymeacoffee.com/ashotis",
+  "isDesktopOnly": false
+}
