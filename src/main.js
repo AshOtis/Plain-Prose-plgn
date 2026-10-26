@@ -170,17 +170,19 @@ class PPView extends ItemView {
     // grade against your range
     const lo = r.floor, hiG = r.ceiling, own = lo !== s.floor || hiG !== s.ceiling;
     const g = el.createDiv('pp-card');
-    const gh = g.createDiv('pp-grade');
+    // top: the grade and verdict on the left; read time, then words and sentences, on the right
+    const gtop = g.createDiv('pp-gtop');
+    const gl = gtop.createDiv('pp-gleft'), gr = gtop.createDiv('pp-gright2');
+    const gh = gl.createDiv('pp-grade');
     gh.createEl('b', { text: ppFmt(r.grade) }); gh.createSpan({ text: 'grade' });
-    const verdict = { in: `In your range (${lo}–${hiG})`, below: `Below your floor (${lo})`, above: `Above your ceiling (${hiG})` }[r.band] + (own ? ' · this note’s own range' : '');
-    gh.createDiv({ cls: 'pp-verdict pp-' + r.band, text: verdict });
+    gr.createDiv({ cls: 'pp-gread', text: `${Math.max(1, Math.round(r.words / s.wpm))} min read` });
+    const verdict = { in: `In your range (${lo}–${hiG})`, below: `Below your floor (${lo})`, above: `Above your ceiling (${hiG})` }[r.band] + (own ? ' · own range' : '');
+    gl.createDiv({ cls: 'pp-verdict pp-' + r.band, text: verdict });
+    gr.createDiv({ cls: 'pp-gcount', text: `${r.words.toLocaleString()} words · ${r.sentences.length} sentences` });
     const scale = g.createDiv('pp-scale'), max = 20, pct = v => Math.max(0, Math.min(100, v / max * 100)) + '%';
     const band = scale.createDiv('pp-band'); band.setCssProps({ left: pct(lo), width: `calc(${pct(hiG)} - ${pct(lo)})` });
     const mk = scale.createDiv('pp-marker'); mk.setCssProps({ left: pct(r.grade) });
     const sl = g.createDiv('pp-scale-l'); sl.createSpan({ text: 'simpler' }); sl.createSpan({ text: 'denser' });
-    const meta = g.createDiv('pp-meta');
-    meta.createSpan({ text: `${r.words.toLocaleString()} words` }); meta.createSpan({ text: `${r.sentences.length} sentences` });
-    meta.createSpan({ text: `${Math.max(1, Math.round(r.words / s.wpm))} min read` });
 
     const coach = ppCoach(r, usual, s);
 
@@ -188,19 +190,27 @@ class PPView extends ItemView {
     const rh = el.createDiv('pp-card');
     const rt = rh.createDiv('pp-h'); rt.createEl('b', { text: 'Rhythm' });
     const feel = r.cv >= 0.55 ? 'Varied' : r.cv >= 0.35 ? 'Steady' : 'Even';
-    rt.createSpan({ cls: 'pp-dim', text: `${feel} · average ${ppFmt(r.avgLen)} words a sentence` });
-    const bars = rh.createDiv('pp-bars');
+    // a habit picked below lights up the sentences that have it
+    const fk = this.focus && r.counts[this.focus] ? this.focus : null;
+    if (fk) {
+      const n = new Set(); for (const i of r.issues) if (i.type === fk) for (let si = 0; si < r.sentences.length; si++) { const x = r.sentences[si]; if (i.from < x.to && i.to > x.from) n.add(si); }
+      this.hits = n;
+      const sh = rt.createSpan({ cls: 'pp-dim pp-showing' }); sh.createSpan({ cls: 'pp-dot pp-c-' + fk }); sh.appendText(` ${n.size} sentence${n.size === 1 ? '' : 's'} with ${PP_CATS[fk].name.toLowerCase()} · `);
+      const cl = sh.createEl('a', { cls: 'pp-clear', text: 'clear' }); cl.onclick = () => { this.focus = null; this.paint(); };
+    } else rt.createSpan({ cls: 'pp-dim', text: `${feel} · average ${ppFmt(r.avgLen)} words a sentence` });
+    const bars = rh.createDiv('pp-bars' + (fk ? ' is-focus' : ''));
     const list = r.sentences.slice(0, 160), hi = Math.max(12, ...list.map(x => x.words));
     const flatAt = r.paras.filter(x => x.flat);
-    for (const x of list) {
-      const b = bars.createDiv('pp-bar' + (flatAt.some(f => x.from >= f.from && x.to <= f.to) ? ' is-flat' : '') + (s.cats.hard && x.grade > hiG && x.words >= 8 ? ' is-hard' : ''));
+    list.forEach((x, si) => {
+      const hit = fk && this.hits.has(si);
+      const b = bars.createDiv('pp-bar' + (flatAt.some(f => x.from >= f.from && x.to <= f.to) ? ' is-flat' : '') + (s.cats.hard && x.grade > hiG && x.words >= 8 ? ' is-hard' : '') + (hit ? ' is-hit pp-hit-' + fk : ''));
       b.setCssProps({ height: Math.max(6, x.words / hi * 100) + '%' });
       b.setAttr('aria-label', `${x.words} words`); b.onclick = () => p.jump(x.from, x.to);
-    }
+    });
     if (r.sentences.length > 160) rh.createDiv({ cls: 'pp-dim', text: `First 160 of ${r.sentences.length} sentences.` });
 
     // habits
-    const hb = el.createDiv('pp-card');
+    const hb = el.createDiv('pp-card pp-habits');
     const hh = hb.createDiv('pp-h'); hh.createEl('b', { text: 'Worth a second look' });
     // the same judgement as the Coach tab, for each row: ✓ fine · • a glance · ! a revision pass
     const lv = {}; for (const c of coach.checks) lv[c.key] = c.level;
@@ -210,10 +220,13 @@ class PPView extends ItemView {
     for (const k of PP_CAT_KEYS) {
       if (!s.cats[k]) continue;
       const n = r.counts[k], row = hb.createDiv('pp-row' + (s.hidden.includes(k) ? ' is-hidden' : ''));
-      row.createSpan({ cls: 'pp-dot pp-c-' + k });
+      const sq = row.createSpan({ cls: 'pp-dot pp-c-' + k + (n ? ' is-click' : '') });
       const nameBox = row.createDiv('pp-namebox');
       const name = nameBox.createEl('a', { cls: 'pp-name', text: PP_CATS[k].name, attr: { 'aria-label': n ? 'Go to the next one' : PP_CATS[k].tip } });
-      name.onclick = () => n && p.jumpNext(k);
+      name.onclick = () => { if (!n) return; if (this.focus !== k) { this.focus = k; this.paint(); } p.jumpNext(k); };
+      sq.onclick = () => { if (!n) return; this.focus = this.focus === k ? null : k; this.paint(); };
+      sq.setAttr('aria-label', 'Show these in the rhythm');
+      if (this.focus === k && n) row.addClass('is-focus');
       nameBox.createDiv({ cls: 'pp-aim', text: aim[k] });
       const l = lv[k] || 'ok', num = row.createSpan({ cls: 'pp-n pp-v-' + l, text: String(n) });
       num.setAttr('aria-label', l === 'ok' ? 'Fine' : l === 'look' ? 'Worth a glance' : 'Worth a revision pass');
@@ -248,8 +261,8 @@ class PPView extends ItemView {
         if (aim) at.setAttr('aria-label', aim[1] ? 'On target' : 'Off target');
       };
       line('Grade', me.grade, a.grade, 1, '', [`${r.floor}–${r.ceiling}`, r.band === 'in']);
-      line('Words/sentence', me.avgLen, a.avgLen, 1, '', ['10–20', me.avgLen >= 10 && me.avgLen <= 20]);
-      line('Variety', me.cv * 100, a.cv * 100, 0, '%', ['50%+', me.cv >= 0.5]);
+      line('Words/sentence', me.avgLen, a.avgLen, 1, '', ['10–20', +ppFmt(me.avgLen, 1) >= 10 && +ppFmt(me.avgLen, 1) <= 20]);
+      line('Variety', me.cv * 100, a.cv * 100, 0, '%', ['50%+', Math.round(me.cv * 100) >= 50]);
       line('Filler /1k', me.filler, a.filler, 1, '', ['under 5', me.filler < 5]);
       line('Adverbs /1k', me.adverb, a.adverb, 1, '', ['under 8', me.adverb < 8]);
       line('Weak verbs /1k', me.weak, a.weak || 0, 1, '', ['under 35', me.weak < 35]);

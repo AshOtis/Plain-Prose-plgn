@@ -109,3 +109,23 @@ body { --pp-weak: #e07a3c; --pp-filler: #d9a521; --pp-adverb: #4f8fe8; --pp-repe
 .pp-again { align-self: flex-end !important; }
 .pp-weak { text-decoration: underline dotted color-mix(in srgb, var(--pp-weak) 85%, transparent); text-decoration-thickness: 2px; }
 .pp-c-weak { background: var(--pp-weak); }
+
+/* grade card top: grade + verdict left, read time + counts right */
+.pp-gtop { display: grid; grid-template-columns: 1fr auto; column-gap: 10px; }
+.pp-gleft { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pp-gright2 { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; text-align: right; font-size: var(--font-ui-smaller); color: var(--text-muted); }
+.pp-gread { padding-top: 6px; }
+.pp-gcount { white-space: nowrap; }
+.pp-gleft .pp-verdict { width: auto; }
+
+/* a habit picked in "Worth a second look" lights up its sentences in the rhythm */
+.pp-bars.is-focus .pp-bar { opacity: .22; }
+.pp-bars.is-focus .pp-bar.is-hit { opacity: 1; }
+.pp-hit-filler { background: var(--pp-filler) !important; } .pp-hit-adverb { background: var(--pp-adverb) !important; }
+.pp-hit-weak { background: var(--pp-weak) !important; } .pp-hit-repeat { background: var(--pp-repeat) !important; }
+.pp-hit-bookism { background: var(--pp-bookism) !important; } .pp-hit-flat { background: var(--pp-flat) !important; } .pp-hit-hard { background: var(--pp-hard) !important; }
+.pp-showing { display: inline-flex; align-items: center; gap: 4px; }
+.pp-showing .pp-dot { width: 8px; height: 8px; }
+.pp-clear { color: var(--text-accent); cursor: pointer; }
+.pp-row.is-focus .pp-name { color: var(--text-accent); }
+.pp-dot.is-click { cursor: pointer; }
