@@ -6,7 +6,7 @@ const PP_VIEW = 'plain-prose-view';
 const PP_MAX_CHARS = 600000;
 const PP_SET = {
   mode: 'edit', floor: 4, ceiling: 10, delay: 600, window: 60, flatCv: 0.25,
-  cats: { filler: true, adverb: true, repeat: true, bookism: true, flat: true, hard: false },
+  cats: { filler: true, adverb: true, weak: true, repeat: true, bookism: true, flat: true, hard: false },
   hidden: [], extraFiller: [], extraBookism: [], ignore: [], wpm: 230
 };
 const ppList = s => String(s || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean);
@@ -94,7 +94,7 @@ class PlainProse extends Plugin {
       await new Promise(r => window.setTimeout(r, 0));          // stay responsive on a big folder
     }
     if (!sums.length) return null;
-    const avg = {}; for (const k of ['grade', 'avgLen', 'cv', 'filler', 'adverb', 'repeat', 'bookism']) avg[k] = ppMean(sums.map(s => s[k]));
+    const avg = {}; for (const k of ['grade', 'avgLen', 'cv', 'filler', 'adverb', 'weak', 'repeat', 'bookism']) avg[k] = ppMean(sums.map(s => s[k]));
     return { n: sums.length, folder: folder ? folder.path || '/' : '/', avg };
   }
 }
@@ -124,6 +124,8 @@ function ppCoach(r, usual, s) {
     say: cvL === 'ok' && !r.counts.flat ? 'Good mix of long and short sentences.' : r.counts.flat ? `${r.counts.flat} paragraph${r.counts.flat === 1 ? '' : 's'} where every sentence is a similar length. Break one up, or let one run long.` : 'Sentences are fairly alike in length. Try a short one after a long one.' });
   out.push({ key: 'adverb', label: 'Adverbs', level: level(me.adverb, 8, 12, usual && usual.adverb),
     say: `${r.counts.adverb} (${ppFmt(me.adverb, 1)} per 1,000 words)${vs(me.adverb, usual && usual.adverb, 8)}. Keep the ones a stronger verb can’t replace.` });
+  out.push({ key: 'weak', label: 'Weak verbs', level: level(me.weak || 0, 35, 55, usual && usual.weak),
+    say: `${r.counts.weak} (${ppFmt(me.weak, 1)} per 1,000)${vs(me.weak || 0, usual && usual.weak, 35)}. Swap a few for verbs that show the action.` });
   out.push({ key: 'filler', label: 'Filler words', level: level(me.filler, 5, 8, usual && usual.filler),
     say: `${r.counts.filler} (${ppFmt(me.filler, 1)} per 1,000)${vs(me.filler, usual && usual.filler, 5)}. Cut the ones that do no work; keep any that are a character’s voice.` });
   out.push({ key: 'repeat', label: 'Close repeats', level: level(closeK, 4, 8),
@@ -204,7 +206,7 @@ class PPView extends ItemView {
     const lv = {}; for (const c of coach.checks) lv[c.key] = c.level;
     lv.flat = !r.counts.flat ? 'ok' : r.counts.flat === 1 ? 'look' : 'fix';
     lv.hard = !r.counts.hard ? 'ok' : 'look';
-    const aim = { filler: 'Aim: under 5/1k', adverb: 'Aim: under 8/1k', repeat: 'Aim: few close together', bookism: 'Aim: 0–2/1k, “said” is best', flat: 'Aim: none', hard: 'Aim: none, unless wanted' };
+    const aim = { filler: 'Aim: under 5/1k', adverb: 'Aim: under 8/1k', weak: 'Aim: under 35/1k', repeat: 'Aim: few close together', bookism: 'Aim: 0–2/1k, “said” is best', flat: 'Aim: none', hard: 'Aim: none, unless wanted' };
     for (const k of PP_CAT_KEYS) {
       if (!s.cats[k]) continue;
       const n = r.counts[k], row = hb.createDiv('pp-row' + (s.hidden.includes(k) ? ' is-hidden' : ''));
@@ -250,6 +252,7 @@ class PPView extends ItemView {
       line('Variety', me.cv * 100, a.cv * 100, 0, '%', ['50%+', me.cv >= 0.5]);
       line('Filler /1k', me.filler, a.filler, 1, '', ['under 5', me.filler < 5]);
       line('Adverbs /1k', me.adverb, a.adverb, 1, '', ['under 8', me.adverb < 8]);
+      line('Weak verbs /1k', me.weak, a.weak || 0, 1, '', ['under 35', me.weak < 35]);
       line('Repeats /1k', me.repeat, a.repeat, 1, '', null);
       line('“Said” alts /1k', me.bookism, a.bookism, 1, '', ['0–2', me.bookism <= 2]);
     }

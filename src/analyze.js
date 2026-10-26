@@ -5,6 +5,7 @@
 const PP_CATS = {
   filler: { name: 'Filler words', tip: 'Often doing no work. Cut it, or keep it if the voice needs it.' },
   adverb: { name: 'Adverbs', tip: 'Could a stronger verb carry this?' },
+  weak: { name: 'Weak verbs', tip: 'Was, got, went, made, seemed… Could a sharper verb carry this?' },
   repeat: { name: 'Repeated words', tip: 'Used again close by.' },
   bookism: { name: '“Said” alternatives', tip: '“Said” is usually invisible. A showy tag can pull focus from the dialogue.' },
   flat: { name: 'Flat rhythm', tip: 'These sentences are all about the same length.' },
@@ -29,6 +30,10 @@ const PP_BOOKISM = ['exclaimed', 'hissed', 'snapped', 'growled', 'snarled', 'ret
   'scoffed', 'huffed', 'harrumphed', 'intoned', 'enthused', 'admonished', 'reiterated', 'responded', 'replied', 'answered', 'questioned', 'inquired',
   'enquired', 'mused', 'pondered', 'surmised', 'cajoled', 'pleaded', 'begged', 'demanded', 'insisted', 'warned', 'threatened', 'whined', 'groaned', 'moaned'];
 // common words that don't count as repeats
+// verbs that carry little on their own. Forms of "be" are skipped before an -ing word (was walking is a tense, not a weak verb),
+// and do/did before "not"
+const PP_WEAK = new Set('was were is are am be been being got get gets getting went go goes made make makes put puts did do does seemed seem seems'.split(' '));
+const PP_BE = new Set('was were is are am be been being'.split(' '));
 const PP_STOP = new Set(('the a an and or but if then so of to in on at by for with from up down out over under into onto off as is was were be been being '
   + 'am are do does did done have has had having i me my mine we us our you your he him his she her hers it its they them their this that these those '
   + 'there here what which who whom whose when where why how not no yes all any some each every both few more most other such than too can could will '
@@ -71,20 +76,40 @@ function ppAnalyze(doc, opts) {
   let words = 0, chars = 0;
   const recent = [];                                   // [{ stem, idx, from }] for repeats
   let wordIdx = 0;
+  // names: words written with a capital letter in the middle of a sentence (Teddy, Jack). They're meant to recur.
+  // Also: a word that's always capitalised and appears more than once (Teddy, even when it starts every sentence).
+  const names = new Set(), capN = new Map(), lowSeen = new Set();
+  for (const b of ppBlocks(doc)) for (const s of ppSentences(b.text)) {
+    let first = true;
+    for (const m of s.text.matchAll(/[\p{L}][\p{L}'’-]*/gu)) {
+      const w = m[0], l = w.toLowerCase(), before = s.text.slice(Math.max(0, m.index - 2), m.index);
+      if (/^\p{Lu}/u.test(w)) { capN.set(l, (capN.get(l) || 0) + 1); if (!first && w !== 'I' && !/[“"‘(]\s*$/.test(before)) names.add(l); }
+      else lowSeen.add(l);
+      first = false;
+    }
+  }
+  for (const [l, n] of capN) if (n >= 2 && !lowSeen.has(l)) names.add(l);
+  for (const l of lowSeen) if (names.has(l) && !capN.has(l)) names.delete(l);
   for (const b of ppBlocks(doc)) {
     if (/^\s*(#{1,6}\s|[-*+]\s+\[.\])/.test(doc.slice(b.from, b.from + 12))) continue;   // headings and tasks aren't prose
     const sents = ppSentences(b.text), lens = [];
     for (const s of sents) {
       const sFrom = b.from + s.from;
       let w = 0, c = 0;
-      for (const m of s.text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)) {
-        const tok = m[0], from = sFrom + m.index, to = from + tok.length, low = tok.toLowerCase();
+      const toks = [...s.text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)];
+      let skipTo = -1;
+      for (let ti = 0; ti < toks.length; ti++) {
+        const m = toks[ti], tok = m[0], from = sFrom + m.index, to = from + tok.length, low = tok.toLowerCase();
+        const next = toks[ti + 1] ? toks[ti + 1][0].toLowerCase() : '';
         w++; c += tok.replace(/[^\p{L}\p{N}]/gu, '').length; wordIdx++;
         if (ignore.has(low)) continue;
         // adverbs: -ly words that are adverbs
         if (low.length > 4 && low.endsWith('ly') && !PP_NOT_ADVERB.has(low) && !fillerWord.has(low)) issues.push({ type: 'adverb', from, to, word: tok });
-        // repeats: a content word used again within the window
-        if (low.length >= 4 && !PP_STOP.has(low) && !/^\d/.test(low)) {
+        // weak verbs ("there was" counts as one)
+        if (ti > skipTo && low === 'there' && /^(was|were|is|are)$/.test(next)) { issues.push({ type: 'weak', from, to: sFrom + toks[ti + 1].index + toks[ti + 1][0].length, word: tok + ' ' + toks[ti + 1][0] }); skipTo = ti + 1; }
+        else if (ti > skipTo && PP_WEAK.has(low) && !(PP_BE.has(low) && /ing$/.test(next)) && !(/^(do|does|did)$/.test(low) && next === 'not')) issues.push({ type: 'weak', from, to, word: tok });
+        // repeats: a content word used again within the window (names don't count)
+        if (low.length >= 4 && !PP_STOP.has(low) && !names.has(low) && !/^\d/.test(low)) {
           const st = ppStem(low);
           while (recent.length && wordIdx - recent[0].idx > o.window) recent.shift();
           const prev = recent.find(r => r.stem === st);
@@ -128,5 +153,5 @@ function ppAnalyze(doc, opts) {
 // the few numbers used to compare one note with others
 function ppSummary(r) {
   const p = k => r.words ? r.counts[k] * 1000 / r.words : 0;
-  return { words: r.words, grade: r.grade, avgLen: r.avgLen, cv: r.cv, filler: p('filler'), adverb: p('adverb'), repeat: p('repeat'), bookism: p('bookism') };
+  return { words: r.words, grade: r.grade, avgLen: r.avgLen, cv: r.cv, filler: p('filler'), adverb: p('adverb'), weak: p('weak'), repeat: p('repeat'), bookism: p('bookism') };
 }

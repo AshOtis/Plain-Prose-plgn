@@ -1,5 +1,5 @@
 /* Plain Prose: soft marks that work with any theme. */
-body { --pp-filler: #d9a521; --pp-adverb: #4f8fe8; --pp-repeat: #a46fe0; --pp-bookism: #e0679b; --pp-flat: #2fb3a0; --pp-hard: #e35d4f; }
+body { --pp-weak: #e07a3c; --pp-filler: #d9a521; --pp-adverb: #4f8fe8; --pp-repeat: #a46fe0; --pp-bookism: #e0679b; --pp-flat: #2fb3a0; --pp-hard: #e35d4f; }
 .pp-mark { border-radius: 2px; text-decoration-thickness: 2px; text-underline-offset: 3px; }
 .pp-filler { background: color-mix(in srgb, var(--pp-filler) 22%, transparent); }
 .pp-adverb { background: color-mix(in srgb, var(--pp-adverb) 20%, transparent); }
@@ -107,3 +107,5 @@ body { --pp-filler: #d9a521; --pp-adverb: #4f8fe8; --pp-repeat: #a46fe0; --pp-bo
 .pp-legend-c { display: flex; gap: 16px; flex-wrap: wrap; }
 .pp-legend-c .pp-n { font-weight: 700; }
 .pp-again { align-self: flex-end !important; }
+.pp-weak { text-decoration: underline dotted color-mix(in srgb, var(--pp-weak) 85%, transparent); text-decoration-thickness: 2px; }
+.pp-c-weak { background: var(--pp-weak); }
