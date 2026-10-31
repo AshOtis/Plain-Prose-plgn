@@ -1,18 +1,25 @@
 /* Plain Prose: soft marks that work with any theme. */
-body { --pp-weak: #e07a3c; --pp-filler: #d9a521; --pp-adverb: #4f8fe8; --pp-repeat: #a46fe0; --pp-bookism: #e0679b; --pp-flat: #2fb3a0; --pp-hard: #e35d4f; }
+body { --pp-weak: #ff8a3d; --pp-filler: #f2b705; --pp-adverb: #3d8bff; --pp-repeat: #b673ff; --pp-bookism: #ff4f9a; --pp-flat: #1fd1b8; --pp-hard: #ff5a4a; --pp-filter: #4cc9f0; --pp-cliche: #ff6b6b; --pp-judge: #e29bff; }
 .pp-mark { border-radius: 2px; text-decoration-thickness: 2px; text-underline-offset: 3px; }
-.pp-filler { background: color-mix(in srgb, var(--pp-filler) 22%, transparent); }
-.pp-adverb { background: color-mix(in srgb, var(--pp-adverb) 20%, transparent); }
-.pp-repeat { text-decoration: underline wavy color-mix(in srgb, var(--pp-repeat) 80%, transparent); text-decoration-thickness: 1.5px; }
-.pp-bookism { background: color-mix(in srgb, var(--pp-bookism) 22%, transparent); }
-.pp-flat { background: color-mix(in srgb, var(--pp-flat) 9%, transparent); }
-.pp-hard { background: color-mix(in srgb, var(--pp-hard) 10%, transparent); }
+.pp-filler { background: color-mix(in srgb, var(--pp-filler) 50%, transparent); }
+.pp-adverb { background: color-mix(in srgb, var(--pp-adverb) 45%, transparent); }
+.pp-repeat { text-decoration: underline wavy color-mix(in srgb, var(--pp-repeat) 100%, transparent); text-decoration-thickness: 2px; }
+.pp-bookism { background: color-mix(in srgb, var(--pp-bookism) 50%, transparent); }
+.pp-flat { background: color-mix(in srgb, var(--pp-flat) 20%, transparent); }
+.pp-filter { background: color-mix(in srgb, var(--pp-filter) 40%, transparent); border-bottom: 2px solid var(--pp-filter); }
+.pp-cliche { background: color-mix(in srgb, var(--pp-cliche) 40%, transparent); }
+.pp-judge { background: color-mix(in srgb, var(--pp-judge) 40%, transparent); }
+.pp-c-filter { background: var(--pp-filter); } .pp-c-cliche { background: var(--pp-cliche); } .pp-c-judge { background: var(--pp-judge); }
+.pp-hit-filter { background: var(--pp-filter) !important; } .pp-hit-cliche { background: var(--pp-cliche) !important; } .pp-hit-judge { background: var(--pp-judge) !important; }
+.pp-hard { background: color-mix(in srgb, var(--pp-hard) 25%, transparent); }
 
 .pp-view { padding: 12px 12px 30px; display: flex; flex-direction: column; gap: 12px; }
 .pp-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .pp-title { font-family: var(--font-text); font-size: 1.2em; }
 .pp-seg { display: flex; border: 1px solid var(--background-modifier-border); border-radius: 8px; overflow: hidden; }
 .pp-seg button { background: none !important; border: 0 !important; box-shadow: none !important; border-radius: 0 !important; padding: 3px 12px !important; height: auto !important; font-size: var(--font-ui-small); color: var(--text-muted); cursor: pointer; }
+.pp-seg button.pp-lvl { border-left: 1px solid var(--background-modifier-border) !important; min-width: 4ch; }
+.pp-seg button.pp-lvl.is-adv { color: var(--text-accent); font-weight: 600; }
 .pp-seg button.is-on { background: var(--background-modifier-hover) !important; color: var(--text-normal); }
 .pp-empty, .pp-note { color: var(--text-muted); font-size: var(--font-ui-small); }
 .pp-note { padding: 6px 10px; border-left: 3px solid var(--interactive-accent); background: var(--background-secondary); border-radius: 0 6px 6px 0; }
@@ -50,7 +57,9 @@ body { --pp-weak: #e07a3c; --pp-filler: #d9a521; --pp-adverb: #4f8fe8; --pp-repe
 .pp-cmp { width: 100%; border-collapse: collapse; font-size: var(--font-ui-small); }
 .pp-cmp th { text-align: left; font-weight: 600; color: var(--text-muted); font-size: var(--font-ui-smaller); padding: 2px 4px; }
 .pp-cmp td { padding: 3px 4px; border-top: 1px solid var(--background-modifier-border); font-variant-numeric: tabular-nums; }
-.pp-arrow { color: var(--text-accent); font-size: .85em; }
+.pp-arrow { color: var(--text-muted); font-size: .85em; }
+.pp-arrow.is-on { color: var(--color-green, #57ab5a); }
+.pp-arrow.is-off { color: var(--color-orange, #d9822b); }
 .pp-link { background: none !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; color: var(--text-accent); font-size: var(--font-ui-smaller); align-self: flex-start; }
 .pp-status { cursor: pointer; }
 .pp-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
@@ -83,7 +92,7 @@ body { --pp-weak: #e07a3c; --pp-filler: #d9a521; --pp-adverb: #4f8fe8; --pp-repe
 .pp-tab.is-on { color: var(--text-normal); border-bottom-color: var(--interactive-accent) !important; }
 .pp-badge { font-size: 11px; line-height: 1; padding: 2px 6px; border-radius: 999px; background: color-mix(in srgb, var(--color-orange, #d9822b) 30%, transparent); color: var(--text-normal); }
 
-.pp-namebox { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pp-namebox { flex: 1; min-width: 0; display: flex; flex-direction: row; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
 .pp-namebox .pp-name { flex: none; }
 .pp-aim { font-size: var(--font-ui-smaller); color: var(--text-faint); line-height: 1.3; }
 .pp-mini { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
@@ -107,7 +116,7 @@ body { --pp-weak: #e07a3c; --pp-filler: #d9a521; --pp-adverb: #4f8fe8; --pp-repe
 .pp-legend-c { display: flex; gap: 16px; flex-wrap: wrap; }
 .pp-legend-c .pp-n { font-weight: 700; }
 .pp-again { align-self: flex-end !important; }
-.pp-weak { text-decoration: underline dotted color-mix(in srgb, var(--pp-weak) 85%, transparent); text-decoration-thickness: 2px; }
+.pp-weak { text-decoration: underline dotted color-mix(in srgb, var(--pp-weak) 100%, transparent); text-decoration-thickness: 2.5px; }
 .pp-c-weak { background: var(--pp-weak); }
 
 /* grade card top: grade + verdict left, read time + counts right */

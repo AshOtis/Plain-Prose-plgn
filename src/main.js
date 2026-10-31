@@ -5,8 +5,8 @@
 const PP_VIEW = 'plain-prose-view';
 const PP_MAX_CHARS = 600000;
 const PP_SET = {
-  mode: 'edit', floor: 4, ceiling: 10, delay: 600, window: 60, flatCv: 0.25,
-  cats: { filler: true, adverb: true, weak: true, repeat: true, bookism: true, flat: true, hard: false },
+  mode: 'edit', level: 'standard', counting: 'fiction', floor: 4, ceiling: 10, delay: 600, window: 60, flatCv: 0.25,
+  cats: { filler: true, adverb: true, weak: true, repeat: true, bookism: true, flat: true, hard: false, filter: true, cliche: true, judge: true },
   hidden: [], extraFiller: [], extraBookism: [], ignore: [], wpm: 230
 };
 const ppList = s => String(s || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean);
@@ -30,6 +30,7 @@ class PlainProse extends Plugin {
     this.status.onclick = () => this.setMode(this.set.mode === 'write' ? 'edit' : 'write');
     this.addSettingTab(new PPSettings(this.app, this));
     this.registerEvent(this.app.workspace.on('active-leaf-change', leaf => {
+      if (leaf && leaf.view instanceof PPView) return;     // clicking our own panel: don't redraw it under the click
       if (leaf && leaf.view instanceof MarkdownView) this.lastMd = leaf.view;
       this.refresh();
     }));
@@ -40,13 +41,16 @@ class PlainProse extends Plugin {
     this.app.workspace.onLayoutReady(() => { const v = this.app.workspace.getActiveViewOfType(MarkdownView); if (v) this.lastMd = v; this.refresh(); });
   }
   save() { return this.saveData(this.set); }
-  opts() { return { floor: this.set.floor, ceiling: this.set.ceiling, window: this.set.window, flatCv: this.set.flatCv, extraFiller: this.set.extraFiller, extraBookism: this.set.extraBookism, ignore: this.set.ignore }; }
+  opts() { return { level: this.set.level, counting: this.set.counting, floor: this.set.floor, ceiling: this.set.ceiling, window: this.set.window, flatCv: this.set.flatCv, extraFiller: this.set.extraFiller, extraBookism: this.set.extraBookism, ignore: this.set.ignore }; }
   views() { return this.app.workspace.getLeavesOfType(PP_VIEW).map(l => l.view).filter(v => v instanceof PPView); }
   async activate() {
     let leaf = this.app.workspace.getLeavesOfType(PP_VIEW)[0];
     if (!leaf) { leaf = this.app.workspace.getRightLeaf(false); await leaf.setViewState({ type: PP_VIEW, active: true }); }
     this.app.workspace.revealLeaf(leaf);
   }
+  setLevel(l) { this.set.level = l; this.folderCache.clear(); this.save(); this.rerunAll(); for (const v of this.views()) v.cmp = null; this.refresh(); }
+  isAdv() { return this.set.level === 'advanced'; }
+  setFocus(k) { this.focusType = k || null; this.repaintAll(); for (const v of this.views()) v.paint(); }
   setMode(m) { this.set.mode = m; this.save(); this.repaintAll(); this.refresh(); }
   repaintAll() { for (const w of this.watchers) w.paint(); }
   rerunAll() { for (const w of this.watchers) w.soon(0); }
@@ -94,7 +98,7 @@ class PlainProse extends Plugin {
       await new Promise(r => window.setTimeout(r, 0));          // stay responsive on a big folder
     }
     if (!sums.length) return null;
-    const avg = {}; for (const k of ['grade', 'avgLen', 'cv', 'filler', 'adverb', 'weak', 'repeat', 'bookism']) avg[k] = ppMean(sums.map(s => s[k]));
+    const avg = {}; for (const k of ['grade', 'avgLen', 'cv', 'filler', 'adverb', 'weak', 'repeat', 'bookism', 'filter', 'cliche', 'judge']) avg[k] = ppMean(sums.map(s => s[k]));
     return { n: sums.length, folder: folder ? folder.path || '/' : '/', avg };
   }
 }
@@ -132,6 +136,11 @@ function ppCoach(r, usual, s) {
     say: close ? `${close} word${close === 1 ? '' : 's'} used again within 20 words. Change one if it wasn’t on purpose.` : 'No words repeated very close together.' });
   if (s.cats.bookism) out.push({ key: 'bookism', label: '“Said” alternatives', level: level(me.bookism, 2.5, 5),
     say: r.counts.bookism ? `${r.counts.bookism} showy dialogue tag${r.counts.bookism === 1 ? '' : 's'}. “Said” usually reads better.` : 'Dialogue tags are plain. Good.' });
+  if (s.level === 'advanced') {
+    if (s.cats.filter) out.push({ key: 'filter', label: 'Filter words', level: level(me.filter || 0, 12, 20, usual && usual.filter), say: `${r.counts.filter} (${ppFmt(me.filter, 1)} per 1,000). Often the scene can be shown directly.` });
+    if (s.cats.cliche) out.push({ key: 'cliche', label: 'Clichés', level: level(me.cliche || 0, 1, 3, null), say: `${r.counts.cliche} stock phrase${r.counts.cliche === 1 ? '' : 's'}.` });
+    if (s.cats.judge) out.push({ key: 'judge', label: 'Judgement words', level: level(me.judge || 0, 3, 6, usual && usual.judge), say: `${r.counts.judge} (${ppFmt(me.judge, 1)} per 1,000). Show what makes it so.` });
+  }
   const fixes = out.filter(x => x.level === 'fix').map(x => x.label.toLowerCase()), looks = out.filter(x => x.level === 'look').map(x => x.label.toLowerCase());
   const and = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0];
   const head = !fixes.length && !looks.length ? 'Reads well. Nothing stands out — this looks like you at your usual.'
@@ -159,6 +168,9 @@ class PPView extends ItemView {
       b.onclick = () => p.setMode(k);
       b.setAttr('aria-label', k === 'write' ? 'Write: no marks while you draft' : 'Edit: show what to look at');
     }
+    const adv = p.isAdv(), lb = seg.createEl('button', { text: adv ? 'Adv' : 'Std', cls: 'pp-lvl' + (adv ? ' is-adv' : '') });
+    lb.onclick = () => p.setLevel(adv ? 'standard' : 'advanced');
+    lb.setAttr('aria-label', adv ? 'Advanced checks on (adds filter words, clichés, judgement words). Click for Standard' : 'Standard checks. Click for Advanced (adds filter words, clichés, judgement words)');
     if (!md) { el.createDiv({ cls: 'pp-empty', text: 'Open a note to see how it reads.' }); return; }
     if (w && w.tooLong) { el.createDiv({ cls: 'pp-empty', text: 'This note is very long. Plain Prose works best on a chapter at a time.' }); return; }
     if (!r || !r.words) { el.createDiv({ cls: 'pp-empty', text: r ? 'No prose in this note yet.' : 'Reading…' }); return; }
@@ -191,12 +203,12 @@ class PPView extends ItemView {
     const rt = rh.createDiv('pp-h'); rt.createEl('b', { text: 'Rhythm' });
     const feel = r.cv >= 0.55 ? 'Varied' : r.cv >= 0.35 ? 'Steady' : 'Even';
     // a habit picked below lights up the sentences that have it
-    const fk = this.focus && r.counts[this.focus] ? this.focus : null;
+    const fk = p.focusType && r.counts[p.focusType] ? p.focusType : null;
     if (fk) {
       const n = new Set(); for (const i of r.issues) if (i.type === fk) for (let si = 0; si < r.sentences.length; si++) { const x = r.sentences[si]; if (i.from < x.to && i.to > x.from) n.add(si); }
       this.hits = n;
       const sh = rt.createSpan({ cls: 'pp-dim pp-showing' }); sh.createSpan({ cls: 'pp-dot pp-c-' + fk }); sh.appendText(` ${n.size} sentence${n.size === 1 ? '' : 's'} with ${PP_CATS[fk].name.toLowerCase()} · `);
-      const cl = sh.createEl('a', { cls: 'pp-clear', text: 'clear' }); cl.onclick = () => { this.focus = null; this.paint(); };
+      const cl = sh.createEl('a', { cls: 'pp-clear', text: 'clear' }); cl.onclick = () => p.setFocus(null);
     } else rt.createSpan({ cls: 'pp-dim', text: `${feel} · average ${ppFmt(r.avgLen)} words a sentence` });
     const bars = rh.createDiv('pp-bars' + (fk ? ' is-focus' : ''));
     const list = r.sentences.slice(0, 160), hi = Math.max(12, ...list.map(x => x.words));
@@ -212,21 +224,22 @@ class PPView extends ItemView {
     // habits
     const hb = el.createDiv('pp-card pp-habits');
     const hh = hb.createDiv('pp-h'); hh.createEl('b', { text: 'Worth a second look' });
+    hh.createSpan({ cls: 'pp-dim pp-small', text: 'how many · per 1,000 words', attr: { 'aria-label': 'The big number is how many in this note. The small one is the same, scaled to 1,000 words, so notes of different lengths compare. The aims use the small one.' } });
     // the same judgement as the Coach tab, for each row: ✓ fine · • a glance · ! a revision pass
     const lv = {}; for (const c of coach.checks) lv[c.key] = c.level;
     lv.flat = !r.counts.flat ? 'ok' : r.counts.flat === 1 ? 'look' : 'fix';
     lv.hard = !r.counts.hard ? 'ok' : 'look';
-    const aim = { filler: 'Aim: under 5/1k', adverb: 'Aim: under 8/1k', weak: 'Aim: under 35/1k', repeat: 'Aim: few close together', bookism: 'Aim: 0–2/1k, “said” is best', flat: 'Aim: none', hard: 'Aim: none, unless wanted' };
+    const aim = { filler: 'Aim: under 5/1k', adverb: 'Aim: under 8/1k', weak: 'Aim: under 35/1k', repeat: 'Aim: few close together', bookism: 'Aim: 0–2/1k, “said” is best', flat: 'Aim: none', hard: 'Aim: none, unless wanted', filter: 'Aim: under 12/1k', cliche: 'Aim: 0', judge: 'Aim: under 3/1k' };
     for (const k of PP_CAT_KEYS) {
-      if (!s.cats[k]) continue;
+      if (!s.cats[k] || (PP_CATS[k].adv && s.level !== 'advanced')) continue;
       const n = r.counts[k], row = hb.createDiv('pp-row' + (s.hidden.includes(k) ? ' is-hidden' : ''));
       const sq = row.createSpan({ cls: 'pp-dot pp-c-' + k + (n ? ' is-click' : '') });
       const nameBox = row.createDiv('pp-namebox');
       const name = nameBox.createEl('a', { cls: 'pp-name', text: PP_CATS[k].name, attr: { 'aria-label': n ? 'Go to the next one' : PP_CATS[k].tip } });
-      name.onclick = () => { if (!n) return; if (this.focus !== k) { this.focus = k; this.paint(); } p.jumpNext(k); };
-      sq.onclick = () => { if (!n) return; this.focus = this.focus === k ? null : k; this.paint(); };
+      name.onclick = () => { if (!n) return; if (p.focusType !== k) p.setFocus(k); window.setTimeout(() => p.jumpNext(k), 30); };
+      sq.onclick = () => { if (!n) return; p.setFocus(p.focusType === k ? null : k); };
       sq.setAttr('aria-label', 'Show these in the rhythm');
-      if (this.focus === k && n) row.addClass('is-focus');
+      if (p.focusType === k && n) row.addClass('is-focus');
       nameBox.createDiv({ cls: 'pp-aim', text: aim[k] });
       const l = lv[k] || 'ok', num = row.createSpan({ cls: 'pp-n pp-v-' + l, text: String(n) });
       num.setAttr('aria-label', l === 'ok' ? 'Fine' : l === 'look' ? 'Worth a glance' : 'Worth a revision pass');
@@ -255,7 +268,7 @@ class PPView extends ItemView {
       const line = (label, mine, avg, d, unit, aim) => {
         const tr = t.createEl('tr'); tr.createEl('td', { text: label });
         const diff = avg ? (mine - avg) / avg : 0, td = tr.createEl('td', { text: ppFmt(mine, d) + (unit || '') });
-        if (Math.abs(diff) >= 0.15) td.createSpan({ cls: 'pp-arrow', text: diff > 0 ? ' ▲' : ' ▼' });
+        if (Math.abs(diff) >= 0.15) td.createSpan({ cls: 'pp-arrow ' + (aim ? (aim[1] ? 'is-on' : 'is-off') : (diff > 0 ? 'is-off' : 'is-on')), text: diff > 0 ? ' ▲' : ' ▼', attr: { 'aria-label': (diff > 0 ? 'Higher' : 'Lower') + ' than your usual' + (aim ? (aim[1] ? ', and on target' : ', and off target') : '') } });
         tr.createEl('td', { cls: 'pp-dim', text: ppFmt(avg, d) + (unit || '') });
         const at = tr.createEl('td', { cls: 'pp-aimcol' + (aim ? (aim[1] ? ' is-on' : ' is-off') : ''), text: aim ? aim[0] : '—' });
         if (aim) at.setAttr('aria-label', aim[1] ? 'On target' : 'Off target');
@@ -268,6 +281,11 @@ class PPView extends ItemView {
       line('Weak verbs /1k', me.weak, a.weak || 0, 1, '', ['under 35', me.weak < 35]);
       line('Repeats /1k', me.repeat, a.repeat, 1, '', null);
       line('“Said” alts /1k', me.bookism, a.bookism, 1, '', ['0–2', me.bookism <= 2]);
+      if (s.level === 'advanced') {
+        line('Filter words /1k', me.filter, a.filter || 0, 1, '', ['under 12', me.filter < 12]);
+        line('Clichés /1k', me.cliche, a.cliche || 0, 1, '', ['0', me.cliche === 0]);
+        line('Judgement /1k', me.judge, a.judge || 0, 1, '', ['under 3', me.judge < 3]);
+      }
     }
   }
   async compare() {
@@ -287,20 +305,25 @@ class PPSettings extends PluginSettingTab {
     new Setting(el).setName('Reading the panel').setHeading();
     const lg = el.createDiv('pp-legend');
     const item = (h, t) => { const d = lg.createDiv(); d.createEl('b', { text: h }); d.appendText(' ' + t); };
-    item('Worth a second look:', 'fewer is better for all of these, and 0 is good. The count is green when it’s fine, amber when it’s worth a glance, and red when it’s worth a revision pass. The aim under each name is a rough guide for fiction.');
+    item('Worth a second look:', 'fewer is better for all of these, and 0 is good. Each row shows how many there are in this note, then the same figure per 1,000 words (“/1k”), which is what the aims and the colours use, so long and short notes compare fairly. The count is green when it’s fine, amber when it’s worth a glance, and red when it’s worth a revision pass. The aim under each name is a rough guide for fiction.');
     const c = lg.createDiv('pp-legend-c');
     for (const [cls, t] of [['ok', 'Fine'], ['look', 'Worth a glance'], ['fix', 'Worth a revision pass']]) { const x = c.createSpan(); x.createSpan({ cls: 'pp-n pp-v-' + cls, text: '3' }); x.appendText(' ' + t); }
     item('Compared with your folder:', '“Usual” is the average of your other notes in the same folder (ones with at least 150 words). ▲ ▼ means this note is more than 15% above or below your usual. Neither is wrong: it’s just how this one differs. The Aim column turns green when this note is on target and amber when it’s worth a look. Repeats depend on the scene, so they have no general aim.');
     item('Rhythm:', 'each bar is a sentence (click one to go to it). Good prose usually mixes long and short. Teal bars are a paragraph where every sentence is a similar length.');
     item('Write and Edit:', 'Write hides every mark in the note while you draft. Edit shows them when you revise.');
 
+    new Setting(el).setName('Level').setHeading();
+    new Setting(el).setName('Which checks to show').setDesc('Standard: filler, adverbs, weak verbs, repeats, “said” alternatives and rhythm. Advanced adds filter words, clichés and judgement words. Switching never deletes anything, and you can also switch from the panel.')
+      .addDropdown(d => d.addOptions({ standard: 'Standard (default)', advanced: 'Advanced' }).setValue(s.level || 'standard').onChange(v => { p.setLevel(v); this.display(); }));
     new Setting(el).setName('Your grade range').setHeading();
     el.createDiv({ cls: 'setting-item-description', text: 'Lower isn’t better: set the range that suits what you write. The easiest way is from your own work: look at “Usual” for Grade in the panel’s comparison, and set a range about 2 either side of it. On this scale (the Automated Readability Index) most fiction sits around 3–9. One note can have its own range: add  prose-range: 5-10  to its properties.' });
+    new Setting(el).setName('How sentences are counted').setDesc('Fiction (default): “No!” she said. counts as one sentence, because the tag belongs to the line of speech. Hemingway-style: every . ! or ? ends a sentence, and so does every line break, so grades match the Hemingway app and plugin. Dialogue-heavy notes read lower that way.')
+      .addDropdown(d => d.addOptions({ fiction: 'Fiction (default)', hemingway: 'Hemingway-style' }).setValue(s.counting || 'fiction').onChange(v => { s.counting = v; again(); }));
     new Setting(el).setName('Floor').addSlider(x => x.setLimits(1, 18, 1).setValue(s.floor).setDynamicTooltip().onChange(v => { s.floor = Math.min(v, s.ceiling - 1); again(); }));
     new Setting(el).setName('Ceiling').addSlider(x => x.setLimits(2, 20, 1).setValue(s.ceiling).setDynamicTooltip().onChange(v => { s.ceiling = Math.max(v, s.floor + 1); again(); }));
 
     new Setting(el).setName('What to look for').setHeading();
-    for (const k of PP_CAT_KEYS) new Setting(el).setName(PP_CATS[k].name).setDesc(PP_CATS[k].tip + (k === 'hard' ? ' Off by default: long sentences aren’t a fault.' : ''))
+    for (const k of PP_CAT_KEYS) if (!PP_CATS[k].adv || s.level === 'advanced') new Setting(el).setName(PP_CATS[k].name).setDesc(PP_CATS[k].tip + (k === 'hard' ? ' Off by default: long sentences aren’t a fault.' : ''))
       .addToggle(t => t.setValue(s.cats[k]).onChange(v => { s.cats[k] = v; p.save(); p.repaintAll(); p.refresh(); }));
     new Setting(el).setName('Repeats: how close').setDesc('A word counts as repeated if it comes back within this many words.')
       .addDropdown(d => d.addOptions({ 30: '30 words', 60: '60 words', 100: '100 words', 150: '150 words' }).setValue(String(s.window)).onChange(v => { s.window = Number(v); again(); }));

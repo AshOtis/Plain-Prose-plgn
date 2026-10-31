@@ -33,7 +33,8 @@ function ppMarks(plugin, result) {
   const s = plugin.set;
   if (!result || s.mode === 'write') return Decoration.none;
   const ranges = [];
-  for (const i of result.issues) if (s.cats[i.type] && !s.hidden.includes(i.type) && i.to > i.from) ranges.push(ppMark(i.type, ppNote(i)).range(i.from, i.to));
+  const only = plugin.focusType && result.counts[plugin.focusType] ? plugin.focusType : null;   // a habit picked in the panel: show just that one in the note
+  for (const i of result.issues) if (s.cats[i.type] && (only ? i.type === only : !s.hidden.includes(i.type)) && i.to > i.from) ranges.push(ppMark(i.type, ppNote(i)).range(i.from, i.to));
   return Decoration.set(ranges, true);
 }
 

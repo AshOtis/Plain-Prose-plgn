@@ -14,6 +14,7 @@ Most readability tools push every sentence towards a lower grade. That suits ins
   - weak verbs (*was, got, went, made, seemed*, and “there was” openings), skipping tenses like *was walking*;
   - words repeated close together, with a list of the words you lean on most (character names don’t count);
   - showy alternatives to “said” (*she hissed, he exclaimed*).
+- **Two ways to count sentences.** Fiction (default) treats “No!” she said. as one sentence; Hemingway-style ends a sentence at every . ! ? and line break, so your grades match the Hemingway app. Switch in Settings.
 - **Compared with your folder:** how this chapter reads next to your others (grade, sentence length, variety, habits per thousand words). Not judged against a school grade.
 - **Write and Edit modes.** Write hides every mark so you can draft. Edit shows them when you revise. Click the status bar, or use the command, to switch.
 - Long sentences are only marked if you turn on **Above your ceiling** in the settings.

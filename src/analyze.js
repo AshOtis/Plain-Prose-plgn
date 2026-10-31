@@ -9,10 +9,30 @@ const PP_CATS = {
   repeat: { name: 'Repeated words', tip: 'Used again close by.' },
   bookism: { name: '“Said” alternatives', tip: '“Said” is usually invisible. A showy tag can pull focus from the dialogue.' },
   flat: { name: 'Flat rhythm', tip: 'These sentences are all about the same length.' },
-  hard: { name: 'Above your ceiling', tip: 'Harder than the range you set for this piece.' }
+  hard: { name: 'Above your ceiling', tip: 'Harder than the range you set for this piece.' },
+  // Advanced level only
+  filter: { name: 'Filter words', adv: true, tip: 'Felt, saw, noticed… the character’s senses stand between the reader and the scene. Show the thing itself.' },
+  cliche: { name: 'Clichés', adv: true, tip: 'A stock phrase readers have met many times. Could this moment have its own detail?' },
+  judge: { name: 'Judgement words', adv: true, tip: 'Beautiful, amazing, terrible… tells the reader what to think. Show what makes it so.' }
 };
 const PP_CAT_KEYS = Object.keys(PP_CATS);
 
+// Advanced: filter words (the character perceiving instead of the scene), stock phrases, and words that only judge
+const PP_FILTER = ['felt', 'saw', 'heard', 'noticed', 'realised', 'realized', 'wondered', 'watched', 'sensed',
+  'could see', 'could hear', 'could feel', 'could tell', 'could smell', 'could sense', 'was able to'];
+const PP_JUDGE = ['beautiful', 'amazing', 'terrible', 'wonderful', 'awful', 'horrible', 'gorgeous', 'stunning', 'incredible', 'fantastic', 'lovely',
+  'awesome', 'magnificent', 'breathtaking', 'dreadful', 'horrific', 'spectacular', 'marvellous', 'marvelous', 'splendid', 'terrific', 'perfect'];
+const PP_CLICHE = (['heart pounded', 'heart hammered', 'heart raced', 'heart skipped a beat', 'heart sank', 'heart leapt', 'heart leaped', 'heart stopped', 'heart was pounding',
+  'blood ran cold', 'blood turned to ice', 'blood froze', 'a shiver ran down', 'shiver down his spine', 'shiver down her spine', 'shiver down my spine', 'shivers down', 'sent shivers', 'chill ran down',
+  'time stood still', 'time seemed to stand still', 'butterflies in', 'knot in my stomach', 'knot in his stomach', 'knot in her stomach', 'pit of my stomach', 'pit of his stomach', 'pit of her stomach',
+  'stomach dropped', 'stomach churned', 'stomach lurched', 'stomach twisted', 'let out a breath', 'let out a sigh', 'released a breath', 'took a deep breath', 'sigh of relief',
+  'steeled himself', 'steeled herself', 'steeled myself', 'gritted his teeth', 'gritted her teeth', 'clenched his jaw', 'clenched her jaw', 'jaw clenched',
+  'piercing blue eyes', 'orbs', 'raven hair', 'didn’t reach his eyes', 'didn’t reach her eyes', "didn't reach his eyes", "didn't reach her eyes",
+  'all hell broke loose', 'dead of night', 'calm before the storm', 'in the blink of an eye', 'a sea of faces', 'like a ton of bricks',
+  'tears streamed down', 'tears welled up', 'tears welled in', 'tears stung', 'silence was deafening', 'deafening silence', 'as if on cue', 'little did he know', 'little did she know',
+  'only time would tell', 'felt like an eternity', 'what felt like', 'took his breath away', 'took her breath away', 'hung in the air', 'hung heavy in the air', 'thick with tension',
+  'tension was palpable', 'palpable tension', 'electricity coursed', 'a breath he didn’t know he was holding', 'a breath she didn’t know she was holding', 'a breath I didn’t know I was holding',
+  "a breath he didn't know he was holding", "a breath she didn't know she was holding", "a breath I didn't know I was holding"]);
 const PP_FILLER = ['just', 'really', 'very', 'actually', 'basically', 'simply', 'quite', 'rather', 'somewhat', 'literally', 'totally',
   'completely', 'definitely', 'certainly', 'truly', 'suddenly', 'slightly', 'sort of', 'kind of', 'a bit', 'a little bit', 'in order to',
   'began to', 'started to', 'seemed to', 'managed to', 'decided to', 'that being said', 'needless to say', 'at the end of the day',
@@ -50,26 +70,35 @@ const ppMean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
 function ppCv(a) { if (a.length < 2) return 0; const m = ppMean(a); if (!m) return 0; const v = ppMean(a.map(x => (x - m) ** 2)); return Math.sqrt(v) / m; }
 
 // sentences in one prose block: [{ from, to, text }] (offsets inside the block)
-function ppSentences(text) {
+function ppSentences(text, hem) {
   const out = []; let start = 0;
   const re = /[.!?…]+["”’')\]]*(?=\s|$)/g; let m;
   while ((m = re.exec(text))) {
     const end = m.index + m[0].length, piece = text.slice(start, end);
     if (m[0][0] === '.' && PP_ABBR.test(text.slice(Math.max(0, m.index - 5), m.index + 1))) continue;  // Mr. Dr. e.g.
-    if (/^\s+[a-z]/.test(text.slice(end, end + 3))) continue;            // “No!” she said. → one sentence
+    if (!hem && /^\s+[a-z]/.test(text.slice(end, end + 3))) continue;   // “No!” she said. → one sentence (fiction counting)
     if (/[\p{L}\p{N}]/u.test(piece)) out.push({ from: start, to: end });
     start = end;
   }
   if (/[\p{L}\p{N}]/u.test(text.slice(start))) out.push({ from: start, to: text.length });
+  if (hem) {                                                            // Hemingway counting: a line break also ends a sentence
+    const more = [];
+    for (const s of out) { let a = s.from; for (const m of text.slice(s.from, s.to).matchAll(/\n/g)) { const e = s.from + m.index; if (/[\p{L}\p{N}]/u.test(text.slice(a, e))) more.push({ from: a, to: e }); a = e + 1; } if (/[\p{L}\p{N}]/u.test(text.slice(a, s.to))) more.push({ from: a, to: s.to }); }
+    out.length = 0; out.push(...more);
+  }
   for (const s of out) { while (s.from < s.to && /\s/.test(text[s.from])) s.from++; s.text = text.slice(s.from, s.to); }
   return out;
 }
 
-// the whole note. opts: { floor, ceiling, cats: {key: bool}, window, flatCv, extraFiller, extraBookism, ignore }
+// the whole note. opts: { counting: 'fiction'|'hemingway', floor, ceiling, cats: {key: bool}, window, flatCv, extraFiller, extraBookism, ignore }
 function ppAnalyze(doc, opts) {
-  const o = Object.assign({ floor: 5, ceiling: 11, window: 60, flatCv: 0.25, extraFiller: [], extraBookism: [], ignore: [] }, opts || {});
+  const o = Object.assign({ level: 'standard', counting: 'fiction', floor: 5, ceiling: 11, window: 60, flatCv: 0.25, extraFiller: [], extraBookism: [], ignore: [] }, opts || {});
+  const hem = o.counting === 'hemingway';
+  const tokRe = hem ? /\d+(?:[.,]\d+)*|[\p{L}][\p{L}\p{N}]*(?:['’-][\p{L}\p{N}]+)*/gu : /[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu;
   const ignore = new Set(o.ignore.map(w => w.toLowerCase()));
   const fillers = PP_FILLER.concat(o.extraFiller).filter(w => !ignore.has(w.toLowerCase()));
+  const adv = o.level === 'advanced', okList = l => l.filter(w => !ignore.has(w.toLowerCase()));
+  const filterRe = adv ? ppPhraseRe(okList(PP_FILTER)) : null, clicheRe = adv ? ppPhraseRe(okList(PP_CLICHE)) : null, judgeRe = adv ? ppPhraseRe(okList(PP_JUDGE)) : null;
   const fillerRe = ppPhraseRe(fillers), fillerWord = new Set(fillers.filter(w => !/\s/.test(w)).map(w => w.toLowerCase()));
   const bookisms = new Set(PP_BOOKISM.concat(o.extraBookism).map(w => w.toLowerCase()).filter(w => !ignore.has(w)));
   const issues = [], sentences = [], paras = [];
@@ -79,7 +108,7 @@ function ppAnalyze(doc, opts) {
   // names: words written with a capital letter in the middle of a sentence (Teddy, Jack). They're meant to recur.
   // Also: a word that's always capitalised and appears more than once (Teddy, even when it starts every sentence).
   const names = new Set(), capN = new Map(), lowSeen = new Set();
-  for (const b of ppBlocks(doc)) for (const s of ppSentences(b.text)) {
+  for (const b of ppBlocks(doc)) for (const s of ppSentences(b.text, hem)) {
     let first = true;
     for (const m of s.text.matchAll(/[\p{L}][\p{L}'’-]*/gu)) {
       const w = m[0], l = w.toLowerCase(), before = s.text.slice(Math.max(0, m.index - 2), m.index);
@@ -92,11 +121,11 @@ function ppAnalyze(doc, opts) {
   for (const l of lowSeen) if (names.has(l) && !capN.has(l)) names.delete(l);
   for (const b of ppBlocks(doc)) {
     if (/^\s*(#{1,6}\s|[-*+]\s+\[.\])/.test(doc.slice(b.from, b.from + 12))) continue;   // headings and tasks aren't prose
-    const sents = ppSentences(b.text), lens = [];
+    const sents = ppSentences(b.text, hem), lens = [];
     for (const s of sents) {
       const sFrom = b.from + s.from;
       let w = 0, c = 0;
-      const toks = [...s.text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)];
+      const toks = [...s.text.matchAll(tokRe)];
       let skipTo = -1;
       for (let ti = 0; ti < toks.length; ti++) {
         const m = toks[ti], tok = m[0], from = sFrom + m.index, to = from + tok.length, low = tok.toLowerCase();
@@ -119,6 +148,8 @@ function ppAnalyze(doc, opts) {
       }
       // filler words and phrases
       for (const m of s.text.matchAll(fillerRe)) issues.push({ type: 'filler', from: sFrom + m.index, to: sFrom + m.index + m[0].length, word: m[0] });
+      if (adv) for (const [re, type] of [[filterRe, 'filter'], [clicheRe, 'cliche'], [judgeRe, 'judge']])
+        for (const m of s.text.matchAll(re)) issues.push({ type, from: sFrom + m.index, to: sFrom + m.index + m[0].length, word: m[0] });
       const grade = ppAri(c, w, 1);
       sentences.push({ from: sFrom, to: b.from + s.to, words: w, grade });
       lens.push(w); words += w; chars += c;
@@ -153,5 +184,5 @@ function ppAnalyze(doc, opts) {
 // the few numbers used to compare one note with others
 function ppSummary(r) {
   const p = k => r.words ? r.counts[k] * 1000 / r.words : 0;
-  return { words: r.words, grade: r.grade, avgLen: r.avgLen, cv: r.cv, filler: p('filler'), adverb: p('adverb'), weak: p('weak'), repeat: p('repeat'), bookism: p('bookism') };
+  return { words: r.words, grade: r.grade, avgLen: r.avgLen, cv: r.cv, filler: p('filler'), adverb: p('adverb'), weak: p('weak'), repeat: p('repeat'), bookism: p('bookism'), filter: p('filter'), cliche: p('cliche'), judge: p('judge') };
 }
